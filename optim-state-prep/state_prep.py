@@ -29,9 +29,8 @@ def main():
 	n, seed, typ = map(int, sys.argv[1:])
 	random.seed(seed)
 
-	for i in range(n):
-		rand3 = random.randrange(3)
-		random_T_pattern.append(rand3 - 1)  # -1, 0, 1
+	for _ in range(n):
+		random_T_pattern.append(random.randint(-1, 1))
 
 	seq_action: list[int] = []
 
@@ -40,7 +39,7 @@ def main():
 		cur_fidel = 0.0
 		cur_shadow_o = 0.0
 
-		for r in range(3 * n):
+		for _ in range(3 * n):
 			best_act = 0
 			best_one_step = -9999
 			best_one_step_fidel = 0.0
@@ -49,9 +48,10 @@ def main():
 			for act in range(3 * n):
 				seq_action.append(act)
 
-				shadow_o = 0.0
-				for rep in range(10000):
-					shadow_o += estimate_one_shadow_overlap(seq_action) / 10000
+				shadow_o = sum(
+					estimate_one_shadow_overlap(seq_action) / 10000
+					for _ in range(10000)
+				)
 
 				fidel = estimate_fidelity(seq_action)
 				score = fidel if typ == 0 else shadow_o
@@ -78,10 +78,10 @@ def main():
 			if random_T_pattern[i] != 0:
 				seq_action.append(((random_T_pattern[i] + 3) % 3) * n + i)
 
-			shadow_o = 0.0
-			for rep in range(10_000):
-				shadow_o += estimate_one_shadow_overlap(seq_action) / 10000
-
+			shadow_o = sum(  # TODO mean
+				estimate_one_shadow_overlap(seq_action) / 10_000
+				for _ in range(10_000)
+			)
 			fidel = estimate_fidelity(seq_action)
 			print(f'{fidel} {2 * (shadow_o - 0.5)}')
 
@@ -90,16 +90,12 @@ def main():
 
 def estimate_fidelity(seq_action: t.Sequence[int]) -> float:
 	fidel = 0.0
-	for rep in range(10_000):
-		bitstring = [0 for _ in range(n)]
-		for i in range(n):
-			mi = random.randrange(2)
-			bitstring[i] = mi
+	for _ in range(10_000):
+		bitstring = random.choices([0, 1], k=2)
 
 		how_many_T = 0
 		for act in seq_action:
-			pos = act % n
-			T_or_not = act // n
+			T_or_not, pos = divmod(act, n)
 
 			if T_or_not == 1:
 				if bitstring[pos] == 1:
@@ -128,18 +124,14 @@ def estimate_fidelity(seq_action: t.Sequence[int]) -> float:
 def estimate_one_shadow_overlap(seq_action: t.Sequence[int]) -> float:
 	"""Shadow overlap is measured in all X bases except for qubit random_x"""
 	random_x = random.randrange(n)
-	bitstring = [0 for _ in range(n)]
-
-	for i in range(n):
-		if i != random_x:
-			mi = random.randrange(2)
-			bitstring[i] = mi
+	bitstring = [
+		random.randrange(2) if i != random_x else 0
+		for i in range(n)
+	]
 
 	how_many_T = 0
 	for act in seq_action:
-		pos: int = act % n
-		T_or_not: int = act // n
-
+		T_or_not, pos = divmod(act, n)
 		if T_or_not == 1:
 			if pos == random_x:
 				how_many_T += 1
@@ -168,7 +160,6 @@ def estimate_one_shadow_overlap(seq_action: t.Sequence[int]) -> float:
 		how_many_T_true += 4
 
 	how_many_T_true = (how_many_T_true + random_T_pattern[random_x] + 8) % 8
-
 	phase_diff = (how_many_T - how_many_T_true + 8) % 8
 	return (
 		abs(0.5 + 0.5 * cmath.exp(1j * (phase_diff / 8.0) * 2.0 * cmath.pi))
